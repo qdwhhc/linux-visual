@@ -87,8 +87,8 @@
           </button>
         </nav>
         <div class="sidebar-contact">
-          <span>联系邮箱</span>
-          <a href="mailto:qdwhhc@foxmail.com">qdwhhc@foxmail.com</a>
+          <span>官方网站</span>
+          <a href="https://qdwh.site" rel="noopener noreferrer" @click.prevent="openOfficialSite">qdwh.site</a>
         </div>
       </aside>
 
@@ -503,6 +503,12 @@
     { key: 'logs', label: '日志中心', icon: 'Document', desc: '查看应用和系统日志' }
   ]
   const activationPageMeta = { key: 'activation', label: '应用授权', desc: '账号套餐与设备授权' }
+  const OFFICIAL_SITE_URL = 'https://qdwh.site'
+  function openOfficialSite() {
+    if (typeof window.whSSH?.openExternalUrl === 'function') {
+      window.whSSH.openExternalUrl(OFFICIAL_SITE_URL)
+    }
+  }
   const { appLanguage, translate } = useAppLanguage()
   const elementLocale = computed(() => appLanguage.value === 'zh-CN' ? zhCn : en)
   const menuLabels = {
