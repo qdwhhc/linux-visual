@@ -106,7 +106,11 @@ docs/            文档
 
 ## 已知事项
 
-- 当前依赖中包含若干来自构建工具链（electron-builder、vite 等）的安全公告，修复需要跨主版本升级，正在单独评估。
+- 已升级 Electron 与 Electron Builder，修复了此前的高危和严重依赖公告。
+- 仍有两项依赖公告待处理：
+  - `vite` / `esbuild`（构建期，影响低）
+  - `monaco-editor` / `dompurify`（编辑器运行时）
+  修复这两项需要跨主版本迁移（Vite 8 改用 Rolldown，monaco 0.57 调整了 worker 路径和中文语言包加载方式），属于单独的迁移任务。
 - 打包 Windows NSIS 安装包时，Electron Builder 需要从 GitHub 下载资源；网络受限时可能失败。
 
 ## 许可证
