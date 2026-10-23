@@ -8,7 +8,7 @@ const PRODUCT_CODE = 'desktop'
 const PRODUCT_ID = 'linux-visual-desktop'
 const PURCHASE_PAGE_URL = `https://qdwh.site/authorization?productCode=${PRODUCT_CODE}`
 const PURCHASE_DEVICE_PARAM = 'device'
-const WECHAT_PAY_APP_ID = 'wx71398b0fe6567811'
+const WECHAT_PAY_APP_ID = String(process.env.LINUX_VISUAL_WECHAT_PAY_APP_ID || '').trim()
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
 
 const activationPublicKey = fs.readFileSync(path.join(__dirname, 'license-keys', 'activation-public.pem'), 'utf8')
