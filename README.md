@@ -4,6 +4,10 @@ Linux Visual 是一款面向 Linux 服务器运维的桌面可视化管理工具
 
 目标是把日常高频的服务器操作从命令行搬到可视化界面：连接服务器、传文件、改 Nginx、看日志、管容器、连数据库，不需要反复记命令。
 
+- 官网：https://qdwh.site
+- 源码（GitHub）：https://github.com/qdwhhc/linux-visual
+- 源码（Gitee）：https://gitee.com/wenhe-huichuang/linux-visual
+
 ## 功能
 
 - **连接账号**：保存和管理服务器连接配置，支持密码与私钥认证
@@ -112,6 +116,12 @@ docs/            文档
   - `monaco-editor` / `dompurify`（编辑器运行时）
   修复这两项需要跨主版本迁移（Vite 8 改用 Rolldown，monaco 0.57 调整了 worker 路径和中文语言包加载方式），属于单独的迁移任务。
 - 打包 Windows NSIS 安装包时，Electron Builder 需要从 GitHub 下载资源；网络受限时可能失败。
+
+## 相关链接
+
+- 官网：https://qdwh.site
+- GitHub：https://github.com/qdwhhc/linux-visual
+- Gitee：https://gitee.com/wenhe-huichuang/linux-visual
 
 ## 许可证
 
