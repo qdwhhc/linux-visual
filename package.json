@@ -1,6 +1,6 @@
 {
   "name": "linux-visual",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "private": true,
   "author": "whhc",
   "description": "可视化 Linux 服务器管理工具",
