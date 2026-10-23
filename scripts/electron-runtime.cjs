@@ -39,6 +39,25 @@ function hasCurrentBranding(runtimeExecutable, expectedStamp) {
   }
 }
 
+const BRANDING_SKIP_TTL_MS = 60 * 60 * 1000
+
+function shouldSkipBranding(runtimeExecutable, expectedStamp) {
+  const skipMarkerPath = `${runtimeExecutable}.branding-skip.json`
+
+  try {
+    const marker = JSON.parse(fs.readFileSync(skipMarkerPath, 'utf8'))
+    return marker.stamp === expectedStamp && Date.now() - Number(marker.at || 0) < BRANDING_SKIP_TTL_MS
+  } catch {
+    return false
+  }
+}
+
+function writeBrandingSkipMarker(runtimeExecutable, expectedStamp) {
+  try {
+    fs.writeFileSync(`${runtimeExecutable}.branding-skip.json`, JSON.stringify({ stamp: expectedStamp, at: Date.now() }))
+  } catch {}
+}
+
 function prepareBrandedElectronRuntime() {
   if (process.platform !== 'win32') return sourceExecutable
   if (process.env.LINUX_VISUAL_SKIP_DEV_BRANDING === '1') return sourceExecutable
@@ -48,6 +67,7 @@ function prepareBrandedElectronRuntime() {
   const brandingStampPath = `${runtimeExecutable}.branding.json`
 
   if (hasCurrentBranding(runtimeExecutable, expectedStamp)) return runtimeExecutable
+  if (shouldSkipBranding(runtimeExecutable, expectedStamp)) return sourceExecutable
 
   fs.copyFileSync(sourceExecutable, runtimeExecutable)
   const rceditArgs = [
@@ -82,6 +102,7 @@ function prepareBrandedElectronRuntime() {
     } catch {}
     const detail = String(result?.stderr || result?.stdout || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean).pop()
     console.warn(`[dev] 写入开发运行时图标失败，已降级使用 Electron 默认运行时${detail ? `：${detail}` : ''}`)
+    writeBrandingSkipMarker(runtimeExecutable, expectedStamp)
     return sourceExecutable
   }
 
