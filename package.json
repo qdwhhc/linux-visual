@@ -1,0 +1,83 @@
+{
+  "name": "linux-visual",
+  "version": "0.2.21",
+  "private": true,
+  "author": "whhc",
+  "description": "可视化 Linux 服务器管理工具",
+  "main": "src/main/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.cjs",
+    "build": "vite build",
+    "start": "node scripts/start.cjs",
+    "license:issue": "node scripts/offline-license.cjs issue",
+    "license:decrypt-device": "node scripts/offline-license.cjs decrypt-device",
+    "dist": "npm run build && electron-builder --win nsis",
+    "dist:win": "npm run dist"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "@xterm/xterm": "^5.5.0",
+    "basic-ftp": "^6.0.1",
+    "element-plus": "^2.14.0",
+    "iconv-lite": "^0.7.2",
+    "monaco-editor": "^0.55.1",
+    "mysql2": "^3.22.4",
+    "sql.js": "^1.14.1",
+    "ssh2": "^1.15.0",
+    "ssh2-sftp-client": "^11.0.0",
+    "vue": "^3.4.38"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1.2",
+    "concurrently": "^8.2.2",
+    "electron": "^31.4.0",
+    "electron-builder": "^24.13.3",
+    "vite": "^5.4.2",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.linuxvisual.app",
+    "productName": "linux-visual",
+    "artifactName": "${productName}-Setup-${version}.${ext}",
+    "compression": "normal",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/renderer/**/*",
+      "src/main/**/*",
+      "package.json",
+      "!**/*.map",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
+    ],
+    "asar": true,
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://qdwh.site/downloads/"
+      }
+    ],
+    "win": {
+      "icon": "build/app-icon.ico",
+      "executableName": "linux-visual",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
