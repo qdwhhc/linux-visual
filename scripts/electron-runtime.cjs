@@ -67,9 +67,12 @@ function prepareBrandedElectronRuntime() {
     result = spawnSync(appBuilderPath, ['rcedit', '--args', JSON.stringify(rceditArgs)], {
       cwd: projectRoot,
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 15000,
+      killSignal: 'SIGKILL'
     })
     if (result.status === 0) break
+    if (result.error && result.error.code === 'ETIMEDOUT') break
     if (attempt < 3) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, attempt * 500)
   }
 

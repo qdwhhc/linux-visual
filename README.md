@@ -69,6 +69,13 @@ npm run dev
 
 默认开发端口范围为 `35040-35049`，`npm run dev` 会自动选择空闲端口，配置见 `scripts/dev.config.cjs`。
 
+开发启动时会尝试给 Electron 运行时写入图标和版本信息，这一步需要联网获取工具。若网络无法访问 GitHub，会等待约 15 秒后自动降级，不影响启动。想跳过等待可直接设置：
+
+```powershell
+$env:LINUX_VISUAL_SKIP_DEV_BRANDING = '1'
+npm run dev
+```
+
 ## 构建
 
 ```bash
