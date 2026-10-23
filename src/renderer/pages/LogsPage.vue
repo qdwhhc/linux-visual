@@ -3,11 +3,14 @@
     <div class="section-line page-hero-line">
       <div>
         <h3>日志中心</h3>
-        <p>{{ logSource === 'application' ? '查看应用运行期间捕获的错误、异常退出和未处理任务。' : (isSSHSession ? '用表格集中展示常见日志文件，点击即可查看最近内容或实时跟随。' : '当前连接不支持服务器日志命令。') }}</p>
+        <p>{{ logSource === 'application' ? '查看应用运行期间捕获的错误、异常退出和未处理任务。' : (logSource === 'network' ? '审计应用发起的每一次对外连接，只记录目标地址，不记录传输内容。' : (isSSHSession ? '用表格集中展示常见日志文件，点击即可查看最近内容或实时跟随。' : '当前连接不支持服务器日志命令。')) }}</p>
       </div>
       <div v-if="logSource === 'application'" class="service-actions">
         <el-button plain :loading="applicationLogLoading" @click="loadApplicationLogs({ notify: true })">刷新</el-button>
         <el-button type="danger" plain :disabled="!applicationLogInfo.size" @click="clearApplicationLogs">删除全部</el-button>
+      </div>
+      <div v-else-if="logSource === 'network'" class="service-actions">
+        <el-button plain :loading="networkAuditLoading" @click="loadNetworkAuditLog({ notify: true })">刷新</el-button>
       </div>
       <div v-else class="service-actions">
         <select v-model.number="logLinesModel">
@@ -24,13 +27,14 @@
     <div class="log-source-switch" role="tablist" aria-label="日志来源">
       <button type="button" :class="{ active: logSource === 'application' }" @click="switchLogSource('application')">应用日志</button>
       <button type="button" :class="{ active: logSource === 'server' }" @click="switchLogSource('server')">服务器日志</button>
+      <button type="button" :class="{ active: logSource === 'network' }" @click="switchLogSource('network')">出站连接</button>
     </div>
 
     <div class="logs-source-content">
       <div v-if="logSourceLoading" class="logs-content-loading-mask">
         <div class="logs-content-loading-card">
           <span class="logs-content-loading-spinner"></span>
-          <strong>{{ logSource === 'application' ? '正在加载应用日志...' : '正在加载服务器日志...' }}</strong>
+          <strong>{{ logSource === 'application' ? '正在加载应用日志...' : (logSource === 'network' ? '正在加载出站连接记录...' : '正在加载服务器日志...') }}</strong>
         </div>
       </div>
 
@@ -72,6 +76,28 @@
               <button class="log-action-link log-action-link--danger" type="button" :disabled="!row.id" @click.stop="deleteApplicationLogEntry(row)">删除</button>
             </template>
           </el-table-column>
+        </el-table>
+      </div>
+    </template>
+
+    <template v-else-if="logSource === 'network'">
+      <div class="application-log-toolbar">
+        <input v-model.trim="networkAuditKeyword" placeholder="搜索时间、目标地址、端口或调用位置" />
+        <div class="application-log-file" :title="networkAuditInfo.file">
+          <span>{{ networkAuditInfo.file || '尚未生成出站连接日志文件' }}</span>
+          <strong>{{ filteredNetworkAuditEntries.length }} 条</strong>
+        </div>
+      </div>
+      <div class="table-shell">
+        <el-table v-loading="networkAuditLoading" border :data="filteredNetworkAuditEntries" height="100%" :show-overflow-tooltip="tableTooltipOptions" class="log-table manage-table" empty-text="暂无出站连接记录，连接服务器后会出现记录">
+          <el-table-column label="时间" width="180" prop="time" />
+          <el-table-column label="目标地址" min-width="220" prop="host" />
+          <el-table-column label="端口" width="90" prop="port" />
+          <el-table-column label="类型" width="90" prop="kind" />
+          <el-table-column label="本机" width="80">
+            <template #default="{ row }">{{ row.local ? '是' : '否' }}</template>
+          </el-table-column>
+          <el-table-column label="调用位置" min-width="260" prop="caller" />
         </el-table>
       </div>
     </template>
@@ -168,6 +194,10 @@
     'applicationLogKeyword',
     'applicationLogLoading',
     'applicationLogInfo',
+    'networkAuditEntries',
+    'networkAuditLoading',
+    'networkAuditInfo',
+    'loadNetworkAuditLog',
     'loadApplicationLogs',
     'clearApplicationLogs',
     'deleteApplicationLogEntry',
@@ -204,6 +234,16 @@
     set: value => emit('update:applicationLogKeyword', value)
   })
 
+  const networkAuditKeyword = ref('')
+  const filteredNetworkAuditEntries = computed(() => {
+    const entries = Array.isArray(props.networkAuditEntries) ? props.networkAuditEntries : []
+    const keyword = networkAuditKeyword.value.trim().toLowerCase()
+    if (!keyword) return entries
+    return entries.filter(item => [item.time, item.host, item.port, item.kind, item.caller]
+      .filter(value => value !== undefined && value !== null)
+      .some(value => String(value).toLowerCase().includes(keyword)))
+  })
+
   async function switchLogSource(source) {
     logSource.value = source
     const loadingToken = Symbol(source)
@@ -212,6 +252,7 @@
     try {
       await nextTick()
       if (source === 'application') await props.loadApplicationLogs?.()
+      else if (source === 'network') await props.loadNetworkAuditLog?.()
       else if (props.connected && props.isSSHSession) await props.loadLogFiles?.()
     } finally {
       if (latestLogSourceLoadingToken === loadingToken) logSourceLoading.value = false

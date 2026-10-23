@@ -38,10 +38,14 @@ export function useLogsManager(options) {
   const applicationLogKeyword = ref('')
   const applicationLogLoading = ref(false)
   const applicationLogInfo = ref({ file: '', size: 0, corruptEntries: 0 })
+  const networkAuditEntries = ref([])
+  const networkAuditLoading = ref(false)
+  const networkAuditInfo = ref({ file: '' })
   const serverLogContents = ref({})
   const serverLogLoadingPaths = ref([])
   let latestApplicationLogRequest = 0
   let latestServerLogRequest = 0
+  let latestNetworkAuditRequest = 0
 
   const filteredLogFiles = computed(() => {
     const keyword = logKeyword.value.trim().toLowerCase()
@@ -126,6 +130,26 @@ export function useLogsManager(options) {
       if (error === 'cancel' || error === 'close') return
       message.value = `应用日志删除失败：${error.message || error}`
       window.reportApplicationError?.('application-log-viewer', error)
+    }
+  }
+
+  async function loadNetworkAuditLog(options = {}) {
+    if (typeof window.whSSH?.getNetworkAuditLog !== 'function') return
+    const { notify = false } = options
+    const requestId = ++latestNetworkAuditRequest
+    networkAuditLoading.value = true
+    try {
+      const result = await window.whSSH.getNetworkAuditLog()
+      if (requestId !== latestNetworkAuditRequest) return
+      networkAuditEntries.value = Array.isArray(result?.entries) ? result.entries : []
+      networkAuditInfo.value = { file: String(result?.file || '') }
+      if (notify) message.value = '出站连接已刷新'
+    } catch (error) {
+      if (requestId !== latestNetworkAuditRequest) return
+      message.value = `出站连接读取失败：${error.message || error}`
+      window.reportApplicationError?.('network-audit-viewer', error)
+    } finally {
+      if (requestId === latestNetworkAuditRequest) networkAuditLoading.value = false
     }
   }
 
@@ -309,6 +333,9 @@ export function useLogsManager(options) {
     applicationLogKeyword,
     applicationLogLoading,
     applicationLogInfo,
+    networkAuditEntries,
+    networkAuditLoading,
+    networkAuditInfo,
     serverLogContents,
     serverLogLoadingPaths,
     filteredLogFiles,
@@ -316,6 +343,7 @@ export function useLogsManager(options) {
     loadApplicationLogs,
     clearApplicationLogs,
     deleteApplicationLogEntry,
+    loadNetworkAuditLog,
     loadLogFiles,
     selectLogFile,
     openLogFile,
