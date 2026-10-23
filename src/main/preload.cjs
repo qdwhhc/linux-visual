@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('whSSH', {
   queryAppDatabase: payload => ipcRenderer.invoke('app-database:query', payload),
   appendApplicationLog: payload => ipcRenderer.invoke('app-log:append', normalizeApplicationLogPayload(payload)),
   readApplicationLogs: () => ipcRenderer.invoke('app-log:read'),
+  getNetworkAuditLog: () => ipcRenderer.invoke('network-audit:read'),
   clearApplicationLogs: () => ipcRenderer.invoke('app-log:clear'),
   deleteApplicationLogEntry: payload => ipcRenderer.invoke('app-log:delete-entry', payload),
   getNginxComposeDraft: payload => ipcRenderer.invoke('nginx-compose-draft:get', payload),

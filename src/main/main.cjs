@@ -7,6 +7,7 @@ const http = require('http')
 const https = require('https')
 const { exec, execFile, execFileSync, spawn } = require('child_process')
 const { Readable } = require('stream')
+const net = require('net')
 const { Client } = require('ssh2')
 const SftpClient = require('ssh2-sftp-client')
 const { FileType } = require('basic-ftp')
@@ -907,6 +908,104 @@ function assertApplicationLogIpcSender(event) {
     if (new URL(senderUrl).origin !== expectedOrigin) throw new Error('拒绝未知来源的日志请求')
   } else if (!senderUrl.startsWith('file:')) {
     throw new Error('拒绝未知来源的日志请求')
+  }
+}
+
+// ---- 出站连接审计 ----
+const OUTBOUND_AUDIT_MAX_ENTRIES = 500
+const outboundAuditEntries = []
+let outboundAuditInstalled = false
+let outboundAuditLastKey = ''
+let outboundAuditLastAt = 0
+
+function getOutboundAuditLogFile() {
+  return path.join(getApplicationLogDirectory(), 'network-audit.log')
+}
+
+function describeOutboundCaller() {
+  try {
+    const frames = String(new Error().stack || '').split('\n')
+    const frame = frames.find((line, index) => index >= 2
+      && !line.includes('recordOutboundConnection')
+      && !line.includes('installOutboundConnectionAudit')
+      && !line.includes('Socket.connect'))
+    if (!frame) return ''
+    const match = frame.match(/\(?([^()\s]+:\d+:\d+)\)?$/)
+    return match ? match[1] : frame.trim()
+  } catch {
+    return ''
+  }
+}
+
+function recordOutboundConnection(host, port, kind) {
+  const targetHost = String(host || '').trim()
+  const targetPort = Number(port || 0)
+  if (!targetHost && !targetPort) return
+
+  const isLocal = targetHost === '127.0.0.1' || targetHost === '::1' || targetHost === 'localhost'
+  const entry = {
+    time: new Date().toLocaleString('zh-CN', { hour12: false }),
+    host: targetHost || '(unix socket)',
+    port: targetPort,
+    kind,
+    local: isLocal,
+    caller: describeOutboundCaller(),
+  }
+  outboundAuditEntries.push(entry)
+  if (outboundAuditEntries.length > OUTBOUND_AUDIT_MAX_ENTRIES) outboundAuditEntries.shift()
+
+  const key = `${entry.host}:${entry.port}:${entry.kind}`
+  const now = Date.now()
+  if (key === outboundAuditLastKey && now - outboundAuditLastAt < 3000) return
+  outboundAuditLastKey = key
+  outboundAuditLastAt = now
+
+  try {
+    const file = getOutboundAuditLogFile()
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.appendFileSync(file, `[${entry.time}] ${entry.host}:${entry.port} ${entry.kind}${entry.caller ? ` <- ${entry.caller}` : ''}\n`)
+  } catch {}
+}
+
+function installOutboundConnectionAudit() {
+  if (outboundAuditInstalled) return
+  outboundAuditInstalled = true
+
+  const originalConnect = net.Socket.prototype.connect
+  net.Socket.prototype.connect = function (...args) {
+    try {
+      const raw = args[0]
+      const target = Array.isArray(raw) ? raw[0] : raw
+      const second = Array.isArray(raw) ? raw[1] : args[1]
+      let host = ''
+      let port = 0
+      let kind = 'tcp'
+      if (target && typeof target === 'object') {
+        if (target.path) {
+          host = String(target.path)
+          kind = 'unix'
+        } else {
+          host = String(target.host || target.hostname || '')
+          port = Number(target.port || 0)
+        }
+      } else if (typeof target === 'number') {
+        port = Number(target)
+        if (typeof second === 'string') host = second
+        else if (second && typeof second === 'object') host = String(second.host || second.hostname || '')
+      } else if (typeof target === 'string') {
+        host = target
+        kind = 'unix'
+      }
+      recordOutboundConnection(host, port, kind)
+    } catch {}
+    return originalConnect.apply(this, args)
+  }
+}
+
+function readOutboundAuditLog() {
+  return {
+    file: getOutboundAuditLogFile(),
+    entries: outboundAuditEntries.slice().reverse(),
   }
 }
 
@@ -6913,6 +7012,11 @@ ipcMain.handle('app-log:delete-entry', async (event, payload = {}) => {
   return deleteApplicationLogEntry(payload)
 })
 
+ipcMain.handle('network-audit:read', async event => {
+  assertApplicationLogIpcSender(event)
+  return readOutboundAuditLog()
+})
+
 ipcMain.handle('nginx-compose-draft:get', async (event, payload = {}) => getNginxComposeDraft(payload))
 
 ipcMain.handle('nginx-compose-draft:set', async (event, payload = {}) => setNginxComposeDraft(payload))
@@ -9850,6 +9954,7 @@ app.whenReady().then(() => {
   migrateLegacyUserData()
   migrateLegacyApplicationLogs()
   cleanupStaleTempFiles()
+  installOutboundConnectionAudit()
   appendApplicationLog({
     level: 'info',
     source: 'application',
