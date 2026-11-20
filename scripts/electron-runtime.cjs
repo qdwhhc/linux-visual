@@ -1,8 +1,6 @@
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
-const { spawnSync } = require('child_process')
-const { appBuilderPath } = require('app-builder-bin')
 
 const projectRoot = path.resolve(__dirname, '..')
 const packageInfo = require(path.join(projectRoot, 'package.json'))
@@ -12,6 +10,11 @@ const productName = packageInfo.build?.productName || packageInfo.name
 const executableName = packageInfo.build?.win?.executableName || productName
 const companyName = packageInfo.author || productName
 const windowsVersion = String(packageInfo.version || '0.0.0').split('.').slice(0, 4).concat(['0', '0', '0', '0']).slice(0, 4).join('.')
+
+const ICON_LANG = 1033
+const ICON_GROUP_ID = 1
+const VERSION_LANG = 1033
+const VERSION_CODEPAGE = 1200
 
 function getBrandingStamp() {
   return JSON.stringify({
@@ -58,6 +61,37 @@ function writeBrandingSkipMarker(runtimeExecutable, expectedStamp) {
   } catch {}
 }
 
+function applyBranding(executablePath) {
+  const ResEdit = require('resedit')
+  const exe = ResEdit.NtExecutable.from(fs.readFileSync(executablePath), { ignoreCert: true })
+  const resource = ResEdit.NtExecutableResource.from(exe)
+
+  const iconFile = ResEdit.Data.IconFile.from(fs.readFileSync(iconPath))
+  ResEdit.Resource.IconGroupEntry.replaceIconsForResource(
+    resource.entries,
+    ICON_GROUP_ID,
+    ICON_LANG,
+    iconFile.icons.map((item) => item.data)
+  )
+
+  const versionInfos = ResEdit.Resource.VersionInfo.fromEntries(resource.entries)
+  const versionInfo = versionInfos[0] || ResEdit.Resource.VersionInfo.createEmpty()
+  versionInfo.setFileVersion(windowsVersion, VERSION_LANG)
+  versionInfo.setProductVersion(windowsVersion, VERSION_LANG)
+  versionInfo.setStringValues({ lang: VERSION_LANG, codepage: VERSION_CODEPAGE }, {
+    FileDescription: productName,
+    ProductName: productName,
+    CompanyName: companyName,
+    InternalName: executableName,
+    OriginalFilename: `${executableName}.exe`,
+    LegalCopyright: `Copyright (c) ${new Date().getFullYear()} ${companyName}`
+  })
+  versionInfo.outputToResourceEntries(resource.entries)
+
+  resource.outputResource(exe)
+  fs.writeFileSync(executablePath, Buffer.from(exe.generate()))
+}
+
 function prepareBrandedElectronRuntime() {
   if (process.platform !== 'win32') return sourceExecutable
   if (process.env.LINUX_VISUAL_SKIP_DEV_BRANDING === '1') return sourceExecutable
@@ -69,45 +103,19 @@ function prepareBrandedElectronRuntime() {
   if (hasCurrentBranding(runtimeExecutable, expectedStamp)) return runtimeExecutable
   if (shouldSkipBranding(runtimeExecutable, expectedStamp)) return sourceExecutable
 
-  fs.copyFileSync(sourceExecutable, runtimeExecutable)
-  const rceditArgs = [
-    runtimeExecutable,
-    '--set-version-string', 'FileDescription', productName,
-    '--set-version-string', 'ProductName', productName,
-    '--set-version-string', 'CompanyName', companyName,
-    '--set-version-string', 'InternalName', executableName,
-    '--set-version-string', 'OriginalFilename', `${executableName}.exe`,
-    '--set-version-string', 'LegalCopyright', `Copyright (c) ${new Date().getFullYear()} ${companyName}`,
-    '--set-file-version', windowsVersion,
-    '--set-product-version', windowsVersion,
-    '--set-icon', iconPath
-  ]
-  let result = null
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    result = spawnSync(appBuilderPath, ['rcedit', '--args', JSON.stringify(rceditArgs)], {
-      cwd: projectRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 15000,
-      killSignal: 'SIGKILL'
-    })
-    if (result.status === 0) break
-    if (result.error && result.error.code === 'ETIMEDOUT') break
-    if (attempt < 3) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, attempt * 500)
-  }
-
-  if (result?.status !== 0) {
+  try {
+    fs.copyFileSync(sourceExecutable, runtimeExecutable)
+    applyBranding(runtimeExecutable)
+    fs.writeFileSync(brandingStampPath, expectedStamp)
+    return runtimeExecutable
+  } catch (error) {
     try {
       fs.rmSync(runtimeExecutable, { force: true })
     } catch {}
-    const detail = String(result?.stderr || result?.stdout || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean).pop()
-    console.warn(`[dev] 写入开发运行时图标失败，已降级使用 Electron 默认运行时${detail ? `：${detail}` : ''}`)
+    console.warn(`[dev] 写入开发运行时图标失败，已降级使用 Electron 默认运行时${error?.message ? `：${error.message}` : ''}`)
     writeBrandingSkipMarker(runtimeExecutable, expectedStamp)
     return sourceExecutable
   }
-
-  fs.writeFileSync(brandingStampPath, expectedStamp)
-  return runtimeExecutable
 }
 
 module.exports = { prepareBrandedElectronRuntime }
